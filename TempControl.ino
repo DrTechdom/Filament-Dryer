@@ -39,7 +39,7 @@ void tempControl() {
       }
       
       //Fan Off
-      if (RelayStat[0] == HIGH && temp_up < temp_cooled) { 
+      if (RelayStat[0] == HIGH && temp_up < temp_cooled && systemStatus != 2) { 
         if (settings_inverted_output == true) {
           digitalWrite(RELAY_FAN_1,HIGH); 
         }else{

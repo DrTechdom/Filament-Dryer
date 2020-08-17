@@ -51,6 +51,7 @@ String         sw_version = "0.32";
  *      - Forgot to change menu back to main menu
  *      - Added heater shut off
  *    - Changed fan cooling to anytime
+ *    - BUG FIX: Fan will not turn on after moving cooling to anytime.. forgot to specify not to monitor when pre-heating *face palm*
  *
  */
 
