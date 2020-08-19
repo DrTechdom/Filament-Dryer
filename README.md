@@ -4,7 +4,6 @@ An Arduino based filament dryer using a food dehydrator.
 Currently this project is at a development level. I'm getting close to publishing a production release.
 
 # Development
-[![Dev Version](https://img.shields.io/badge/development%20version-v8.4.x.x-blue.svg)](https://github.com/DrTechdom/Fliament-Dryer/releases/latest)
 
 Please use this release level at your own risk as this maybe buggy, incomplete, or unsafe as far as a safety stand point.
 :warning: DO NOT USE FOR PRODUCTION USE :warning:
