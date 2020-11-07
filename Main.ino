@@ -8,7 +8,7 @@ struct menuDB {
   byte menuNum;
   char name[20];
   int sMode;
-  int hours;
+  double hours;
   int humitity;
   int tempature;
 } menu[] = {
@@ -18,8 +18,13 @@ struct menuDB {
     {  1,     "Manual Drying",  3,        0,      0,        0},
     {  2,     "Programs",       0,        0,      0,        0}, // Menu Title
     {  2,     "<Main Menu>",    1,        0,      0,        0},
-    {  2,     "PLA",            4,        4,      10,       120},
-    {  2,     "PETG",           4,        4,      10,       100},
+    {  2,     "ABS",            4,        2,      15,       140},
+    {  2,     "TEST",           4,        0.3,    20,       115},
+    {  2,     "PLA",            4,        4,      15,       115},
+    {  2,     "PETG",           4,        4,      15,       140},
+    {  2,     "Nylon",          4,        12,     10,       140},
+    {  2,     "TPU",            4,        4,      10,       120},
+    {  2,     "PVA",            4,        4,      10,       150},
     {  3,     "Time",           0,        0,      0,        0}, // Menu Title
     {  3,     "<Main Menu>",    1,        0,      0,        0},
     {  3,     "1 Hour",         5,        1,      0,        90},
@@ -31,12 +36,12 @@ struct menuDB {
     {  3,     "20 Hour",        5,        20,     0,        90},
     {  3,     "24 Hour",        5,        24,     0,        90},
     {  3,     "48 Hour",        5,        48,     0,        90},
-    {  4,     "Menu",           0,        0,      0,        0}, // Menu Title
-    {  4,     "Back",           4,        0,      0,        0},
-    {  4,     "Stop Process",   1,        0,      0,        0},
-    {  5,     "Menu",           0,        0,      0,        0}, // Menu Title
-    {  5,     "Back",           5,        0,      0,        0},
-    {  5,     "Stop Process",   1,        0,      0,        0}
+    {  6,     "Menu",           0,        0,      0,        0}, // Menu Title
+    {  6,     "Back",           4,        0,      0,        0},
+    {  6,     "Stop Process",   1,        0,      0,        0},
+    {  7,     "Menu",           0,        0,      0,        0}, // Menu Title
+    {  7,     "Back",           5,        0,      0,        0},
+    {  7,     "Stop Process",   0,        0,      0,        0}
 };
 
 /* Declaration for an SSD1306 display connected to I2C (SDA, SCL pins) */
@@ -62,14 +67,18 @@ byte systemStatus = 0; //0 = idle , 1 = running , 2 = pre-heat , 3 = emergency s
 bool displayFlip = false;
 String error_lastStop;
 float temp_up, temp_low, hum_up, hum_low;
+byte heat_setting = 1;
+byte heat_failed = 0;
+bool heat_holding = false;
 
 /* Temp and humidity settings */
 int temp_lastPreheatCheck = 0;
 
 /* Timers */
-unsigned long timer_maxPreheat = 0;
+//unsigned long timer_maxPreheat = 0;
 unsigned long timer_display_flip = 0;
 unsigned long timer_high_on = 0;
+unsigned long timer_heat_debounce = 0;
 
 
 /* Macros for getting elapsed time */
@@ -79,10 +88,13 @@ unsigned long timer_high_on = 0;
 #define numberOfDays(_time_) ((((_time_ / 1000) / 60) / 60) / 60)
 
 DHT dht_up(DHTPIN_UP, DHTTYPE);
-DHT dht_low(DHTPIN_LOW, DHTTYPE);
+
+#if defined(OUTSIDE_TEMPSENSOR) 
+  DHT dht_low(DHTPIN_LOW, DHTTYPE);
+#endif
 
 void setup() {
-  #if defined(debugMode)
+  #if defined(debugMode) 
     Serial.begin(9600);
     Serial.println(F("Filament Dryer Starting . . ."));
   #endif
@@ -91,9 +103,6 @@ void setup() {
   pinMode(RELAY_HEAT_1,OUTPUT);
   pinMode(RELAY_HEAT_2,OUTPUT);
   pinMode(RELAY_HEAT_3,OUTPUT);
- // pinMode(30, INPUT);
- // pinMode(28, INPUT);
- // pinMode(26, INPUT);
 
   if (settings_inverted_output == true) {
     digitalWrite(RELAY_FAN_1,HIGH); 
@@ -124,23 +133,29 @@ void setup() {
   display.println(F("Dryer"));
   display.setCursor(3, 57);
   display.setTextSize(1);
-  display.println("Version: "+sw_version);
+  display.print("Version: "); display.println(sw_version);
   display.display();
   delay(1500);
 
   dht_up.begin();
+  #if defined(OUTSIDE_TEMPSENSOR) 
   dht_low.begin();
+  #endif
   
   // Initial fetch of tempature
   delay(300);
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   float h1 = dht_up.readHumidity();
-  float h2 = dht_low.readHumidity();
+  #if defined(OUTSIDE_TEMPSENSOR) 
+    float h2 = dht_low.readHumidity();
+  #endif
   // Read temperature as Celsius (the default)
   float t1 = dht_up.readTemperature();
+  #if defined(OUTSIDE_TEMPSENSOR) 
   float t2 = dht_low.readTemperature();
-
+  #endif
+  
   // Check if any reads failed and exit early
   if (isnan(h1) || isnan(t1)) {
     #if defined(debugMode)
@@ -149,6 +164,8 @@ void setup() {
     error_lastStop = "Upper DHT sensor is dissconnected or has stopped responding!";
     systemStatus = 3; // E-stop
   }
+  
+  #if defined(OUTSIDE_TEMPSENSOR) 
   if (isnan(h2) || isnan(t2)) {
     #if defined(debugMode)
       Serial.println(F("Failed to read from lower DHT sensor!"));
@@ -156,6 +173,7 @@ void setup() {
     error_lastStop = "Lower DHT sensor is dissconnected or has stopped responding!";
     systemStatus = 3; // E-stop
   }
+  #endif
   
   MenuSelection();
   timer_display_flip = millis();
@@ -170,8 +188,6 @@ void loop() {
    //Drying mode
    switch (systemStatus) {
     case 0: //Normal operations
-    case 1:
-    case 2:
       // Check status of button input
       for (int i = 0; i < 3; i++) {
         BtnStat[i] = ButtonStatus(i);
@@ -179,20 +195,35 @@ void loop() {
           MenuSelection();
         }
       }
-       if (refresh == true) {
+    case 1: //Pre Heat
+    case 2: //Drying
+      // Check status of button input
+      for (int i = 0; i < 3; i++) {
+        BtnStat[i] = ButtonStatus(i);
+        if (BtnStat[i] == HIGH) {
+          if (menuLocation == 4) { menuLocation = 6; }
+          if (menuLocation == 5) { menuLocation = 7; }
+          MenuSelection();
+        }
+      }
+
+      //Force a screen refresh
+      if (refresh == true) {
          MenuSelection();
          refresh = false;
-       }
+      }
+      
        if (menuLocation == 4 || menuLocation == 5) {
         // Load program if not done and start
         if (systemStatus == 0) {
           systemStatus = 2; //set to preheat
+          heat_setting = 1; //set heat to low
           long t = menu[materialNum].hours * 3600; //Convert hours to seconds
           timerProgram = t * 1000 + millis(); // Load time into memory
         }
-        display_dry(); // Update info
+          display_dry(); // Update info
      }
-   break;
+     break;
     case 3: //Emergency
       display.clearDisplay();
       display.setTextSize(2);

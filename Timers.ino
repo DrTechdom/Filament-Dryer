@@ -1,3 +1,4 @@
+/* End of program timer */
 void timer_main() {
   long t = timerProgram - millis();
 
@@ -18,4 +19,21 @@ void timer_main() {
       digitalWrite(RELAY_HEAT_3,LOW);
      }
   }
+}
+
+/* Heater debounce timer set */
+void timer_set_heater_debounce() {
+  timer_heat_debounce = millis() + 60000; /* Set 60 second debounce */
+  #if defined(debugMode)
+    Serial.println(F("Setting heater bebounce timer to 60 seconds"));
+  #endif
+}
+
+/* Heater debounce timer */
+bool timer_check_heater_debounce() {
+  bool n = false;
+  if (timer_heat_debounce < millis()) {
+    n = true;
+  }
+  return n;
 }
