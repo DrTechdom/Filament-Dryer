@@ -1,4 +1,4 @@
-# Fliament-Dryer
+# Filament-Dryer
 An Arduino based filament dryer using a food dehydrator.
 
 Currently this project is at a development level. I'm getting close to publishing a production release.
